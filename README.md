@@ -6,7 +6,7 @@ Seguimiento básico mediante un filtro de partículas.
 Para ejecutar este proyecto en tu entorno local, sigue los pasos a continuación:
 
 1. **Clonar el repositorio:**
-  git clone https://github.com/usuario/proyecto-seguimiento-objeto.git
+  git clone https://github.com/fjcg-mx/filtro-particulas
 2. **Navega hasta el repositorio:**
   cd nombre-del-repositorio
 3. **Crea un entorno virtual (si aún no lo has hecho):**
@@ -16,5 +16,5 @@ Para ejecutar este proyecto en tu entorno local, sigue los pasos a continuación
 4. **Si es necesario, instala las dependencias:**
   pip install -r requirements.txt
 
-# Ejemplo de ejecución
-python main.py
+## Ejemplo de ejecución
+  python main.py
