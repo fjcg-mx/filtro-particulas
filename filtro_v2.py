@@ -4,8 +4,7 @@ import numpy as np
 import time
 import random
 
-#------------------------------------------------------------------------------------------
-# Funciones de Color
+#------------------ Funciones de Color utiles -------------------
 
 def rgb2hsv(color):
     # Aseguramos que el color esté en formato np.uint8
@@ -17,6 +16,28 @@ def rgb2hsv(color):
     # Devuelvo el valor en HSV como un array
     return np.array(hsv_color[0][0])
 
+#-------------- 1. Inicialización de partículas -----------------------
+
+def crear_particulas(num_particulas, max1, max2):
+  """
+  Crea las partículas en posiciones aleatorias.
+
+  Parametros:
+  - num_particulas: Numero de particulas a crear.
+  - max1: Valor maximo de la posicion x.
+  - max2: Valor maximo de la posicion y.
+  Retorno:
+  - lista de partículas.
+  """
+  # Validar que max1 y max2 sean mayores que 0
+  if max1 <= 0 or max2 <= 0:
+    raise ValueError("Los valores de max1 y max2 deben ser mayores que 0.")
+  
+  # Generar las partículas aleatorias
+  particulas = np.random.randint(0, [max1, max2], size=(num_particulas, 2))
+  return particulas
+
+#--------- 2. Propagación de partículas (predicción) -----------------
 def particula_obtener_color(particula, imagen, tam_ventana=3):
   """
   Obtiene la región alrededor de una partícula en la imagen.
@@ -35,118 +56,6 @@ def particula_obtener_color(particula, imagen, tam_ventana=3):
   region = imagen[max(0, y - mitad_ventana):min(imagen.shape[0], y + mitad_ventana),
                   max(0, x - mitad_ventana):min(imagen.shape[1], x + mitad_ventana)]
   return region
-
-
-def calcular_peso_color(region, color_objetivo_hsv, tolerancia):
-  """
-  Calcula el peso de una partícula basada en el color de la región que la rodea,
-  comparado con el color objetivo y utilizando una tolerancia.
-
-  Parametros:
-  - region: La región de la imagen que rodea la partícula.
-  - color_objetivo_hsv: El color objetivo en espacio HSV.
-  - tolerancia: La tolerancia para la diferencia de color. Por defecto 30.
-
-  Retorno:
-  - Peso calculado basado en la distancia entre los colores.
-  """
-  region_hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV) # Convertir la región a espacio HSV
-  mean_color = np.mean(region_hsv, axis=(0, 1))  # Promedio de la región (media de los valores HSV)
-  
-  # Calcular la distancia Euclidiana entre el color promedio y el color objetivo
-  distance = np.linalg.norm(mean_color - color_objetivo_hsv)
-
-  #print(f"Distancia: {int(distance)}")
-  peso = None
-  # Ajustar el cálculo para considerar una tolerancia
-  if distance < tolerancia: # Peso mayor si el color está cerca del objetivo
-    peso = 1 / (1 + np.exp(-distance / tolerancia))  # Función sigmoidea suave
-  else: # Si la diferencia es grande, asignamos un peso bajo
-    peso = np.exp(-distance / tolerancia)  # Decaimiento exponencial
-  peso = np.clip(peso, 0.01, 1.0)
-  return peso
-#------------------------------------------------------------------------------------------
-# Funciones de Movimiento y Pesos
-
-def calcular_peso_movimiento(mapa_calor, particula):
-  """
-  Calcula el peso de la partícula basado en el mapa de calor.
-
-  Parametros:
-  - mapa_calor: Mapa de calor que muestra las diferencias entre fotogramas.
-  - particula: Posición de la partícula (x, y)
-
-  Retorno:
-  - Peso de movimiento normalizado
-  """
-  x, y = particula
-  # Asegurarse de que las partículas estén dentro de los límites de la imagen
-  y = np.clip(y, 0, mapa_calor.shape[0] - 1)
-  x = np.clip(x, 0, mapa_calor.shape[1] - 1)
-  peso_movimiento = mapa_calor[y, x]  # Obtener la intensidad en la posición de la partícula
-  return peso_movimiento / 255.0  # Normalizar el peso
-
-def particulas_calcular_peso(imagen, particula, mapa_calor, color_objetivo_hsv, alpha, beta, tolerancia_color):
-  """
-  Calcula el peso final de una partícula basado en movimiento y color.
-
-  Parametros:
-  - imagen: Imagen actual.
-  - particula: Posición de la partícula.
-  - mapa_calor: Mapa de calor.
-  - target_color_hsv: Color objetivo.
-  - alpha: Coeficiente de peso para el movimiento.
-  - beta: Coeficiente de peso para el color.
-  - tolerancia_color: Tolerancia al color
-  Retorno:
-  - Peso final de la partícula.
-  """
-  # Peso basado en el movimiento
-  peso_movimiento = calcular_peso_movimiento(mapa_calor, particula)
-
-  # Peso basado en el color
-  region = particula_obtener_color(particula, imagen)
-  peso_color = calcular_peso_color(region, color_objetivo_hsv, tolerancia_color)
-  #print(f"Partícula, peso de color = {peso_color}")
-
-  # Combinamos ambos pesos 
-  #final_weight = peso_movimiento * color_weight
-  # Combinar los pesos con ponderación ajustada
-  peso_final = alpha * peso_movimiento + beta * peso_color
-
-  return peso_final
-
-#------------------------------------------------------------------------------------------
-# Funciones de Re-muestreo
-
-def particulas_remuestreo(particulas, pesos):
-  """
-  Realiza el re-muestreo de partículas basado en sus pesos.
-
-  Parametros:
-  - particulas: Lista de posiciones de las partículas.
-  - pesos: Pesos de las partículas.
-
-  Retorno:
-  - Nueva lista de partículas re-muestreadas.
-  """
-  # Normalizar los pesos para que sumen 1
-  suma_pesos = np.sum(pesos)
-  pesos_normalizados = 0
-  if suma_pesos == 0:
-    # Si todos los pesos son cero, asignar pesos uniformes (esto puede ser un caso raro)
-    pesos_normalizados = np.ones(len(pesos)) / len(pesos)
-  else:
-    pesos_normalizados = pesos / suma_pesos
-  
-  # Asegurarse de que los pesos sumen exactamente 1 (debido a errores de redondeo)
-  pesos_normalizados = np.clip(pesos_normalizados, 0, 1)
-  pesos_normalizados /= np.sum(pesos_normalizados)  # Re-normalizamos para que sumen exactamente 1
-  
-  # Selección aleatoria de partículas basada en sus pesos
-  indices = np.random.choice(len(particulas), size=len(particulas), p=pesos_normalizados)
-  nuevas_particula = particulas[indices]
-  return nuevas_particula
 
 def particulas_actualizar(imagen, particulas, prediccion, radio = 3, color_objetivo_hsv = None, tolerancia_color=None):
   """
@@ -183,35 +92,121 @@ def particulas_actualizar(imagen, particulas, prediccion, radio = 3, color_objet
         # Si la partícula no está cerca del color objetivo, mantén el color original (rojo, por ejemplo)
         cv2.circle(imagen, tuple(particulas[i]), radio, (0, 0, 255), 2)  # Rojo (BGR)
 
-#------------------------------------------------------------------------------------------
-def crear_particulas(num_particulas, max1, max2):
+
+#-------------------- 3. Medición de la probabilidad -------------------
+
+def calcular_peso_color(region, color_objetivo_hsv, tolerancia):
   """
-  Crea las partículas en posiciones aleatorias.
+  Calcula el peso de una partícula basada en el color de la región que la rodea,
+  comparado con el color objetivo y utilizando una tolerancia.
 
   Parametros:
-  - num_particulas: Numero de particulas a crear.
-  - max1: Valor maximo de la posicion x.
-  - max2: Valor maximo de la posicion y.
+  - region: La región de la imagen que rodea la partícula.
+  - color_objetivo_hsv: El color objetivo en espacio HSV.
+  - tolerancia: La tolerancia para la diferencia de color. Por defecto 30.
+
   Retorno:
-  - lista de partículas.
+  - Peso calculado basado en la distancia entre los colores.
   """
-  # Validar que max1 y max2 sean mayores que 0
-  if max1 <= 0 or max2 <= 0:
-    raise ValueError("Los valores de max1 y max2 deben ser mayores que 0.")
+  region_hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV) # Convertir la región a espacio HSV
+  mean_color = np.mean(region_hsv, axis=(0, 1))  # Promedio de la región (media de los valores HSV)
   
-  # Generar las partículas aleatorias
-  particulas = np.random.randint(0, [max1, max2], size=(num_particulas, 2))
-  return particulas
+  # Calcular la distancia Euclidiana entre el color promedio y el color objetivo
+  distance = np.linalg.norm(mean_color - color_objetivo_hsv)
+  peso = peso = np.exp(-distance / tolerancia)  # Decaimiento exponencial
+  return  peso
+
+# Funciones de Movimiento y Pesos
+def calcular_peso_movimiento(mapa_calor, particula):
+  """
+  Calcula el peso de la partícula basado en el mapa de calor.
+
+  Parametros:
+  - mapa_calor: Mapa de calor que muestra las diferencias entre fotogramas.
+  - particula: Posición de la partícula (x, y)
+
+  Retorno:
+  - Peso de movimiento normalizado
+  """
+  x, y = particula
+  # Asegurarse de que las partículas estén dentro de los límites de la imagen
+  y = np.clip(y, 0, mapa_calor.shape[0] - 1)
+  x = np.clip(x, 0, mapa_calor.shape[1] - 1)
+  peso_movimiento = mapa_calor[y, x]  # Obtener la intensidad en la posición de la partícula
+  return peso_movimiento / 255.0  # Normalizar el peso
+
+#--------------------- 4. Actualización de pesos: ---------------------
+
+def particulas_calcular_peso(imagen, particula, mapa_calor, color_objetivo_hsv, alpha, beta, tolerancia_color):
+  """
+  Calcula el peso final de una partícula basado en movimiento y color.
+
+  Parametros:
+  - imagen: Imagen actual.
+  - particula: Posición de la partícula.
+  - mapa_calor: Mapa de calor.
+  - target_color_hsv: Color objetivo.
+  - alpha: Coeficiente de peso para el movimiento.
+  - beta: Coeficiente de peso para el color.
+  - tolerancia_color: Tolerancia al color
+  Retorno:
+  - Peso final de la partícula.
+  """
+  # Peso basado en el movimiento
+  peso_movimiento = calcular_peso_movimiento(mapa_calor, particula)
+
+  # Peso basado en el color
+  region = particula_obtener_color(particula, imagen)
+  peso_color = calcular_peso_color(region, color_objetivo_hsv, tolerancia_color)
+
+  # Combinamos ambos pesos 
+  #final_weight = peso_movimiento * color_weight
+  # Combinar los pesos con ponderación ajustada
+  peso_final = alpha * peso_movimiento + beta * peso_color
+
+  return peso_final
+
+#------------------- 5. Remuestreo de partículas ----------------------
+
+def particulas_remuestreo(particulas, pesos):
+  """
+  Realiza el re-muestreo de partículas basado en sus pesos.
+
+  Parametros:
+  - particulas: Lista de posiciones de las partículas.
+  - pesos: Pesos de las partículas.
+
+  Retorno:
+  - Nueva lista de partículas re-muestreadas.
+  """
+  # Normalizar los pesos para que sumen 1
+  suma_pesos = np.sum(pesos)
+  pesos_normalizados = 0
+  if suma_pesos == 0:
+    # Si todos los pesos son cero, asignar pesos uniformes (esto puede ser un caso raro)
+    pesos_normalizados = np.ones(len(pesos)) / len(pesos)
+  else:
+    pesos_normalizados = pesos / suma_pesos
+  
+  # Asegurarse de que los pesos sumen exactamente 1 (debido a errores de redondeo)
+  pesos_normalizados = np.clip(pesos_normalizados, 0, 1)
+  pesos_normalizados /= np.sum(pesos_normalizados)  # Re-normalizamos para que sumen exactamente 1
+  
+  # Selección aleatoria de partículas basada en sus pesos
+  indices = np.random.choice(len(particulas), size=len(particulas), p=pesos_normalizados)
+  nuevas_particula = particulas[indices]
+  return nuevas_particula
 
 
-#------------------------------------------------------------------------------------------
+# ---------------------- Filtro de partículas V2--------------------------
+
 """
 Procesa el video - seguimiento de objeto con filtro de particulas.
 
 Parametro:
 - archivo: Ruta/Nombre del archivo de video.
 """
-def procesar_video(archivo):
+def filtros_particulas_v2(archivo):
   
   # Configuración de colores, para el color objetivo en HSV 
   azulBajo = np.array([100, 100, 20], np.uint8) #Azul en un rango
@@ -225,18 +220,19 @@ def procesar_video(archivo):
   color_rgb_azul_muestra = (19,48,118)  # Color RGB
   
   color_objetivo_hsv_azul_muestra = rgb2hsv(color_rgb_azul_muestra)
-
+  
   color_objetivo_hsv = color_objetivo_hsv_azul_muestra
+  print(color_objetivo_hsv)
 
-  tolerancia_color = 70 # Tolerancia para la diferencia de color.
+  tolerancia_color = 73 # Tolerancia para la diferencia de color.
 
   # Para el filtro de particulas
   num_particulas = 200  # Número de partículas a usar en el filtro.
-  radio_particula = 3 # Radio de cada partícula.
+  radio_particula = 1 # Radio de cada partícula.
   # Ajustar los coeficientes alpha y beta para ponderar la importancia de movimiento y color
   alpha = 0.0  # Peso para el movimiento
-  beta = 0.7  # Peso para el color
-  prediccion = 16 # Rango de movimiento aleatorio de las partículas.
+  beta = 0.5  # Peso para el color
+  prediccion = 13 # Rango de movimiento aleatorio de las partículas.
   
   # Captura de video y sus caracteristicas
   video = cv2.VideoCapture(archivo)
@@ -246,6 +242,7 @@ def procesar_video(archivo):
   ancho = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
   largo = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
   fps= int(video.get(cv2.CAP_PROP_FPS))
+  print(f"Imagen: {ancho} x {largo}")
   f = 0
 
   # Inicializar partículas (posición aleatoria)
@@ -258,7 +255,7 @@ def procesar_video(archivo):
     return  # Detener el proceso si no se puede leer el primer fotograma
   
   # Inicializar con el primer fotograma
-  previous_frame = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)  
+  previous_frame = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
 
   while video.isOpened():
 
@@ -267,15 +264,15 @@ def procesar_video(archivo):
     if ret: # Solo proceder si se ha leído correctamente el fotograma
 
       frame = imagen.copy()
-      #cv2.putText(imagen,str(f),(ancho-100,largo-50),cv2.FONT_HERSHEY_PLAIN, 3, (255,255,255))
+      cv2.putText(imagen,str(f),(ancho-100,largo-50),cv2.FONT_HERSHEY_PLAIN, 3, (255,255,255))
       
-      frameHSV = cv2.cvtColor(imagen, cv2.COLOR_BGR2HSV)
-      maskAzul = cv2.inRange(frameHSV, azulBajo, azulAlto)
-      maskRedvis = cv2.bitwise_and(imagen, imagen, mask= maskAzul)
+      #frameHSV = cv2.cvtColor(imagen, cv2.COLOR_BGR2HSV)
+      #maskAzul = cv2.inRange(frameHSV, azulBajo, azulAlto)
+      #maskAzulvis = cv2.bitwise_and(imagen, imagen, mask= maskAzul)
 
       cv2.imshow('Video', imagen) # Muestra el fotograma
-      cv2.imshow('maskRed', maskAzul)
-      cv2.imshow('maskRedvis', maskRedvis)
+      #cv2.imshow('maskAzul', maskAzul)
+      #cv2.imshow('maskAzulvis', maskAzulvis)
 
       # Convertir el frame a escala de grises
       gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -301,13 +298,13 @@ def procesar_video(archivo):
 
       
       # Mostrar el video con las partículas y la detección de movimiento
-      cv2.imshow('Deteccion de movimiento con filtro de particulas', frame)
+      cv2.imshow('Deteccion de movimiento con filtro de particulas v2', frame)
       
       # Actualizar la imagen anterior
       previous_frame = gray
 
       # delay
-      #time.sleep(0+1/fps)
+      time.sleep(0+1/fps)
 
       if cv2.waitKey(1) & 0xFF == ord('s'): # Termina cuando se apriete s(salir)
         break
@@ -325,4 +322,4 @@ def procesar_video(archivo):
 # Llamar a la función main
 if __name__ == "__main__":
   nombre_archivo = "walking.mp4"
-  procesar_video(nombre_archivo)
+  filtros_particulas_v2(nombre_archivo)
